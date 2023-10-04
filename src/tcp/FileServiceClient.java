@@ -1,5 +1,7 @@
 package tcp;
 
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -34,7 +36,7 @@ public class FileServiceClient {
 
             String fileName;
             ByteBuffer request;
-            int bytesToRead;
+            int bytesToRead = 0;
             ByteBuffer statusCode;
             byte[] a;
             switch(command) {
@@ -78,7 +80,8 @@ public class FileServiceClient {
                     fileName = keyboard.nextLine();
                     request = ByteBuffer.wrap((fileName).getBytes());
                     channel.write(request);
-                    //Tell server that it has received all data and it can process the request. So that server doesn't sit waiting
+                    //Tell server that it has received all data and it can process the request.
+                    // So that server doesn't sit waiting
                     channel.shutdownOutput();
                     bytesToRead = 1;
                     statusCode = ByteBuffer.allocate(bytesToRead);
@@ -92,6 +95,15 @@ public class FileServiceClient {
                     break;
 
                 case "L":
+
+                    channel.shutdownOutput();
+                    bytesToRead = 1;
+                    statusCode = ByteBuffer.allocate(bytesToRead);
+                    while((bytesToRead -= channel.read(statusCode)) > 0);
+                    statusCode.flip();
+                    a = new byte[1];
+                    statusCode.get(a);
+                    System.out.println(new String(a));
                     break;
                 case "R":
                     break;
@@ -107,8 +119,9 @@ public class FileServiceClient {
             int bytesRead = channel.read(responseBuffer);
             if (bytesRead > 0) {
                 responseBuffer.flip();
-                char selected = (char) responseBuffer.get();
+                char firstByte = (char) responseBuffer.get();
                 byte[] responseData = new byte[responseBuffer.remaining()];
+
                 responseBuffer.get(responseData);
                 String response = new String(responseData);
                 switch (command) {
@@ -120,6 +133,9 @@ public class FileServiceClient {
                         break;
                     case "U":
                         System.out.printf("This file was uploaded successfully: %s", response);
+                        break;
+                    case "L":
+                        System.out.printf("Files: %s", response);
                         break;
                     default:
                         System.out.println(response);

@@ -7,6 +7,8 @@ import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Arrays;
 
 public class FileServiceServer{
     public static void main(String[] args) throws Exception{
@@ -41,6 +43,7 @@ public class FileServiceServer{
             String fileName;
             File file;
             boolean success = false;
+            ByteBuffer fileBytes = null;
             switch (command) {
                 case 'G':
                     //File to download
@@ -65,6 +68,9 @@ public class FileServiceServer{
                     fileName = new String(a);
                     file = new File("ServerFiles/"+fileName);
                     boolean created = file.createNewFile();
+
+                    //Read 1000 bytes from file and upload the 1000 bytes to server keep doing this
+                    //in a loop while() => read 1000 bytes send 1000 bytes
                     if(created) {
                         file.createNewFile();
                         ByteBuffer code = ByteBuffer.wrap("S".getBytes());
@@ -95,6 +101,18 @@ public class FileServiceServer{
                     }
                     break;
                 case 'L':
+                    final File folder = new File("ServerFiles");
+                    ArrayList<String> filesArr = new ArrayList<>();
+
+                    for(File aFile : folder.listFiles()) {
+                        filesArr.add(String.valueOf(aFile));
+                    }
+
+                    for(String someFile : filesArr) {
+                        fileBytes = ByteBuffer.wrap(someFile.getBytes());
+                        serveChannel.write(fileBytes);
+                    }
+
                     break;
                 case 'R':
                     break;
