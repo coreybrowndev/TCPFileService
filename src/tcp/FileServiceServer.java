@@ -1,12 +1,15 @@
 package tcp;
 
 import java.io.File;
+import java.io.FileOutputStream;
+import java.io.PrintWriter;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 
@@ -57,6 +60,10 @@ public class FileServiceServer{
                         ByteBuffer code = ByteBuffer.wrap("Process succeeded".getBytes());
                         serveChannel.write(code);
                         serveChannel.write(fileBuffer);
+                        File created = new File(fileName);
+                        created.createNewFile();
+                        Files.write(created.toPath(), fileContent);
+
                     }else {
                         ByteBuffer code = ByteBuffer.wrap("Process Failed".getBytes());
                         serveChannel.write(code);
@@ -64,22 +71,38 @@ public class FileServiceServer{
                     break;
                 case 'U':
                     a = new byte[request.remaining()];
-                    request.get(a);
-                    fileName = new String(a);
-                    file = new File("ServerFiles/"+fileName);
-                    boolean created = file.createNewFile();
 
-                    //Read 1000 bytes from file and upload the 1000 bytes to server keep doing this
-                    //in a loop while() => read 1000 bytes send 1000 bytes
-                    if(created) {
-                        file.createNewFile();
-                        ByteBuffer code = ByteBuffer.wrap("S".getBytes());
+                    request.get(a);
+                    String totalData = new String(a);
+
+                    int separatorIndex = totalData.indexOf('%');
+
+                    if(separatorIndex == -1) {
+                        System.out.println("Invalid file format");
+                        ByteBuffer code = ByteBuffer.wrap("Process Failed".getBytes());
                         serveChannel.write(code);
-                    }else {
-                        ByteBuffer code = ByteBuffer.wrap("F".getBytes());
-                        serveChannel.write(code);
+                        break;
                     }
+
+                    fileName = totalData.substring(0, separatorIndex);
+                    Path outputPath = Paths.get("ServerFiles", fileName);
+                    FileOutputStream fos = new FileOutputStream(outputPath.toFile(), true);  // append mode
+
+                    byte[] remainingBytes = totalData.substring(separatorIndex + 1).getBytes();
+                    fos.write(remainingBytes);
+
+                    ByteBuffer fileChunkBuffer = ByteBuffer.allocate(1000);
+                    int bytesRead;
+                    while ((bytesRead = serveChannel.read(fileChunkBuffer)) > 0) {
+                        fos.write(fileChunkBuffer.array(), 0, bytesRead);
+                        fileChunkBuffer.clear();
+                    }
+                    fos.close();
+
+                    ByteBuffer sCode = ByteBuffer.wrap("S".getBytes());
+                    serveChannel.write(sCode);
                     break;
+
                 case 'D':
                     //Excludes the bytes that we got from the command
                      a = new byte[request.remaining()];
@@ -115,6 +138,31 @@ public class FileServiceServer{
 
                     break;
                 case 'R':
+                    a = new byte[request.remaining()];
+                    request.get(a);
+                    String renameRequest = new String(a);
+                    String[] renameParts = renameRequest.substring(1).split("\\|");
+                    //After creating this substring, the code uses the split method to split it into an array of strings using the pipe character.
+                    //(|) as the delimiter.
+
+                    if (renameParts.length == 2) {
+                        String oldFileName = renameParts[0];
+                        String newFileName = renameParts[1];
+                        File oldFile = new File("ServerFiles/" + oldFileName);
+                        File newFile = new File("ServerFiles/" + newFileName);
+
+                        if (oldFile.exists() && oldFile.isFile()) {
+                            success = oldFile.renameTo(newFile);
+                        }
+                    }
+
+                    if (success) {
+                        ByteBuffer code = ByteBuffer.wrap("S".getBytes());
+                        serveChannel.write(code);
+                    } else {
+                        ByteBuffer code = ByteBuffer.wrap("F".getBytes());
+                        serveChannel.write(code);
+                    }
                     break;
                 default:
                     System.out.println("Bye Bye!!");

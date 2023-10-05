@@ -1,13 +1,11 @@
 package tcp;
 
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
-import java.io.File;
-import java.io.IOException;
+import java.io.*;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
+import java.nio.file.Files;
 import java.util.Scanner;
 
 public class FileServiceClient {
@@ -60,9 +58,25 @@ public class FileServiceClient {
                 case "U":
                     System.out.println("Enter a file name to be uploaded");
                     fileName = keyboard.nextLine();
-                    request = ByteBuffer.wrap((fileName).getBytes());
-                    channel.write(request);
+                    File fileToUpload = new File(fileName);
+                    if (!fileToUpload.exists() || !fileToUpload.isFile()) {
+                        System.out.println("Invalid file path.");
+                        break;
+                    }
 
+                    // Send the filename first with a separator
+                    ByteBuffer fileNameBuffer = ByteBuffer.wrap((fileName + "%").getBytes());
+                    channel.write(fileNameBuffer);
+
+                    // Read and send file in chunks
+                    byte[] bufferArray = new byte[1000];
+                    FileInputStream fis = new FileInputStream(fileToUpload);
+                    int bytesRead;
+                    while ((bytesRead = fis.read(bufferArray)) != -1) {
+                        ByteBuffer fileChunkBuffer = ByteBuffer.wrap(bufferArray, 0, bytesRead);
+                        channel.write(fileChunkBuffer);
+                    }
+                    fis.close();
                     channel.shutdownOutput();
                     bytesToRead = 1;
                     statusCode = ByteBuffer.allocate(bytesToRead);
@@ -106,6 +120,26 @@ public class FileServiceClient {
                     System.out.println(new String(a));
                     break;
                 case "R":
+                    System.out.println("Enter the old file name to rename: ");
+                    String oldFileName = keyboard.nextLine();
+                    System.out.println("Enter the new file name: ");
+                    String newFileName = keyboard.nextLine();
+
+                    // Send old and new file names to the server for renaming
+                    String renameRequest = "R" + oldFileName + "|" + newFileName;
+                    //pipe character as a delimiter
+                    ByteBuffer renameBuffer = ByteBuffer.wrap(renameRequest.getBytes());
+                    channel.write(renameBuffer);
+
+                    channel.shutdownOutput();
+                    bytesToRead = 1;
+                    statusCode = ByteBuffer.allocate(bytesToRead);
+
+                    while ((bytesToRead -= channel.read(statusCode)) > 0) ;
+                    statusCode.flip();
+                    a = new byte[1];
+                    statusCode.get(a);
+                    System.out.println(new String(a));
                     break;
                 default:
                         if(!command.equals("0")) {
@@ -137,6 +171,8 @@ public class FileServiceClient {
                     case "L":
                         System.out.printf("Files: %s", response);
                         break;
+                    case "R":
+                        System.out.printf("Renamed file: %s", response);
                     default:
                         System.out.println(response);
                         break;
