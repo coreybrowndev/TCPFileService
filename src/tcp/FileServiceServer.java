@@ -37,7 +37,7 @@ public class FileServiceServer{
                 //read() will return -1 when the special signal is received.
                 //The special signal is triggered by the shutdownOutput on the client side
                 numBytes = serveChannel.read(request);
-            }while(numBytes >= 0);
+            }while(request.position() < request.capacity() && numBytes >= 0);
 
             request.flip();
             char command = (char) request.get();
@@ -59,9 +59,8 @@ public class FileServiceServer{
                         ByteBuffer fileBuffer = ByteBuffer.wrap(fileContent);
                         ByteBuffer code = ByteBuffer.wrap("Process succeeded".getBytes());
                         serveChannel.write(code);
-                        serveChannel.write(fileBuffer);
+                        serveChannel.write(ByteBuffer.wrap(fileName.getBytes()));
                         File created = new File(fileName);
-                        created.createNewFile();
                         Files.write(created.toPath(), fileContent);
 
                     }else {
@@ -93,6 +92,7 @@ public class FileServiceServer{
 
                     ByteBuffer fileChunkBuffer = ByteBuffer.allocate(1000);
                     int bytesRead;
+
                     while ((bytesRead = serveChannel.read(fileChunkBuffer)) > 0) {
                         fos.write(fileChunkBuffer.array(), 0, bytesRead);
                         fileChunkBuffer.clear();
@@ -101,6 +101,7 @@ public class FileServiceServer{
 
                     ByteBuffer sCode = ByteBuffer.wrap("S".getBytes());
                     serveChannel.write(sCode);
+                    serveChannel.write(ByteBuffer.wrap(fileName.getBytes()));
                     break;
 
                 case 'D':
@@ -118,6 +119,7 @@ public class FileServiceServer{
                     if(success) {
                         ByteBuffer code = ByteBuffer.wrap("S".getBytes());
                         serveChannel.write(code);
+                        serveChannel.write(ByteBuffer.wrap(fileName.getBytes()));
                     }else {
                         ByteBuffer code = ByteBuffer.wrap("F".getBytes());
                         serveChannel.write(code);
@@ -132,6 +134,7 @@ public class FileServiceServer{
                     }
 
                     for(String someFile : filesArr) {
+                        System.out.printf("File: %s\n", someFile);
                         fileBytes = ByteBuffer.wrap(someFile.getBytes());
                         serveChannel.write(fileBytes);
                     }
@@ -173,7 +176,7 @@ public class FileServiceServer{
             //Rewinds the position without touching the limit
             request.rewind();
             //Read from the buffer and write into the TCP channel
-            serveChannel.write(request);
+//            serveChannel.write(request);
             serveChannel.close();
 
             //

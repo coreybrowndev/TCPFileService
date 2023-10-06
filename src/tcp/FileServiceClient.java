@@ -73,6 +73,7 @@ public class FileServiceClient {
                     FileInputStream fis = new FileInputStream(fileToUpload);
                     int bytesRead;
                     while ((bytesRead = fis.read(bufferArray)) != -1) {
+                        System.out.println(bytesRead);
                         ByteBuffer fileChunkBuffer = ByteBuffer.wrap(bufferArray, 0, bytesRead);
                         channel.write(fileChunkBuffer);
                     }
@@ -109,7 +110,6 @@ public class FileServiceClient {
                     break;
 
                 case "L":
-
                     channel.shutdownOutput();
                     bytesToRead = 1;
                     statusCode = ByteBuffer.allocate(bytesToRead);
@@ -153,9 +153,8 @@ public class FileServiceClient {
             int bytesRead = channel.read(responseBuffer);
             if (bytesRead > 0) {
                 responseBuffer.flip();
-                char firstByte = (char) responseBuffer.get();
+//                char firstByte = (char) responseBuffer.get();
                 byte[] responseData = new byte[responseBuffer.remaining()];
-
                 responseBuffer.get(responseData);
                 String response = new String(responseData);
                 switch (command) {
@@ -166,10 +165,10 @@ public class FileServiceClient {
                         System.out.printf("The file was deleted: %s", response);
                         break;
                     case "U":
-                        System.out.printf("This file was uploaded successfully: %s", response);
+                        System.out.printf("File was uploaded successfully: %s", response);
                         break;
                     case "L":
-                        System.out.printf("Files: %s", response);
+                        System.out.printf("Files: %s\n", response);
                         break;
                     case "R":
                         System.out.printf("Renamed file: %s", response);
