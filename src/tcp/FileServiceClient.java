@@ -84,7 +84,6 @@ public class FileServiceClient {
                     a = new byte[1];
                     statusCode.get(a);
                     System.out.println(new String(a));
-
                     break;
                 case "R":
                     System.out.println("Enter the old file name to rename: ");
@@ -120,7 +119,6 @@ public class FileServiceClient {
             int bytesRead = channel.read(responseBuffer);
             if (bytesRead > 0) {
                 responseBuffer.flip();
-//                char firstByte = (char) responseBuffer.get();
                 byte[] responseData = new byte[bytesRead];
                 responseBuffer.get(responseData, 0, responseData.length);
                 String response = new String(responseData);
@@ -150,43 +148,21 @@ public class FileServiceClient {
     public static void downloadFile() throws IOException {
         System.out.println("Enter a file name to download");
         fileName = keyboard.nextLine();
-        request = ByteBuffer.wrap((fileName.getBytes()));
+        request = ByteBuffer.wrap((fileName).getBytes());
 
         channel.write(request);
         //Implement file download functionality
 
-
         channel.shutdownOutput();
-        bytesToRead = 17;
+        bytesToRead = 1;
         statusCode = ByteBuffer.allocate(bytesToRead);
-//        channel.read(statusCode);
+        channel.read(statusCode);
 
         while((bytesToRead -= channel.read(statusCode)) > 0);
         statusCode.flip();
-        a = new byte[17];
+        a = new byte[1];
         statusCode.get(a);
         System.out.println(new String(a));
-
-//        if(statusString.equals("S")) {
-//            ByteBuffer lengthBuffer = ByteBuffer.allocate(4);
-//            channel.read(lengthBuffer);
-//            lengthBuffer.flip();
-//            int contentLength = lengthBuffer.getInt();
-//
-//            ByteBuffer fileContentBuffer = ByteBuffer.allocate(contentLength);
-//            channel.read(fileContentBuffer);
-//            byte[] fileContent = fileContentBuffer.array();
-//
-//            File downloadedFile = new File("DownloadedFiles/" + fileName);
-//            try (FileOutputStream fos = new FileOutputStream(downloadedFile)) {
-//                fos.write(fileContent);
-//            }
-//
-//            System.out.printf("File downloaded successfully: %s%n", downloadedFile.getAbsolutePath());
-//        }else {
-//            System.out.printf("Failed to download file: %s%n", fileName);
-//
-//        }
     }
 
     public static void uploadProcess() {

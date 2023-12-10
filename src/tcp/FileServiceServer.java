@@ -13,7 +13,6 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ThreadPoolExecutor;
 
 public class FileServiceServer{
     private static byte[] a;
@@ -24,12 +23,8 @@ public class FileServiceServer{
     private static ExecutorService executor = Executors.newFixedThreadPool(2);
 
     public static void main(String[] args) throws Exception{
-
-
         //Process all channel request from the client
         ServerSocketChannel welcomeChannel = ServerSocketChannel.open();
-
-
 
         welcomeChannel.socket().bind(new InetSocketAddress(3000));
         //Blocking call -> Sitting waiting to accept connection request from client
@@ -137,13 +132,6 @@ public class FileServiceServer{
             //Send reply back to client
             //Rewinds the position without touching the limit
             request.rewind();
-            //Read from the buffer and write into the TCP channel
-//            serveChannel.write(request);
-
-//            serveChannel.close();
-
-            //
-
         }
 
     }
@@ -191,7 +179,7 @@ public class FileServiceServer{
 
     public static class FileDownload implements Runnable {
         private final SocketChannel serveChannel;
-        private final String fileName;
+        private String fileName;
 
         private final ByteBuffer request;
 
@@ -204,30 +192,31 @@ public class FileServiceServer{
         @Override
         public void run() {
             try {
-                handleDownload(serveChannel, fileName, request);
+                handleDownload(serveChannel);
             } catch (IOException e) {
                 e.printStackTrace();
             }
         }
 
-        private void handleDownload(SocketChannel serveChannel, String fileName, ByteBuffer request) throws IOException {
-            a = new byte[request.remaining()];
-            request.get(a);
-            fileName = new String(a);
-            file = new File("ServerFiles/"+fileName);
+        private void handleDownload(SocketChannel serveChannel) throws IOException {
+            request.get();
+            byte[] fileNameBytes = new byte[request.remaining()];
+            request.get(fileNameBytes);
+            fileName = new String(fileNameBytes);
+            file = new File("ServerFiles/"+ fileName);
 
-            System.out.println("OUR FILE: " + file);
+            System.out.println("OUR FILEEE: "+ file);
             if(file.exists() && file.isFile()) {
                 byte[] fileContent = Files.readAllBytes(file.toPath());
-//                ByteBuffer fileBuffer = ByteBuffer.wrap(fileContent);
+                ByteBuffer fileBuffer = ByteBuffer.wrap(fileContent);
                 ByteBuffer code = ByteBuffer.wrap("S".getBytes());
                 serveChannel.write(code);
-                serveChannel.write(ByteBuffer.wrap(fileName.getBytes()));
+                serveChannel.write(fileBuffer);
                 File created = new File(fileName);
+                created.createNewFile();
                 Files.write(created.toPath(), fileContent);
-
             }else {
-                ByteBuffer code = ByteBuffer.wrap("Process Failed".getBytes());
+                ByteBuffer code = ByteBuffer.wrap("F".getBytes());
                 serveChannel.write(code);
             }
         }
