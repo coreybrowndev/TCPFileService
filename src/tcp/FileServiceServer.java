@@ -1,10 +1,12 @@
 package tcp;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.nio.file.Files;
@@ -156,10 +158,23 @@ public class FileServiceServer{
 
 
         public void run() {
+            lock.lock();
             try {
+                while(uploader || downloaders > 0) {
+                    noDownloaderOrUploader.await();
+                }
+                uploader = true;
+                shared++;
                 handleUpload(serveChannel, request);
+                uploader = false;
+                noDownloaderOrUploader.signal();
+                noUploader.signal();
             }catch(IOException e) {
                 e.printStackTrace();
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }finally {
+                lock.unlock();
             }
         }
 
@@ -214,20 +229,41 @@ public class FileServiceServer{
 
         public FileDownload(SocketChannel serveChannel, String fileName, ByteBuffer request) {
             this.serveChannel = serveChannel;
-            this.fileName = fileName;
+//            this.fileName = fileName;
             this.request = request;
         }
 
         @Override
         public void run() {
+            lock.lock();
             try {
+                while (uploader) {
+                    noUploader.await();
+                }
+                downloaders++;
                 handleDownload(serveChannel);
-            } catch (IOException e) {
+            } catch (InterruptedException e) {
                 e.printStackTrace();
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            } finally {
+                lock.unlock();
+            }
+            System.out.println(shared);
+            lock.lock();
+            try {
+                downloaders--;
+                if (downloaders == 0) {
+                    noDownloaderOrUploader.signal();
+                }
+            } finally {
+                lock.unlock();
             }
         }
 
         private void handleDownload(SocketChannel serveChannel) throws IOException {
+            String fileName;
+            File file;
             request.get();
             byte[] fileNameBytes = new byte[request.remaining()];
             request.get(fileNameBytes);
