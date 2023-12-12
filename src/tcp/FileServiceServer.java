@@ -223,7 +223,6 @@ public class FileServiceServer{
 
     public static class FileDownload implements Runnable {
         private final SocketChannel serveChannel;
-        private String fileName;
 
         private final ByteBuffer request;
 
