@@ -11,8 +11,13 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Scanner;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.ReentrantLock;
+
+import static tcp.FileServiceServer.FileUpload.handleUpload;
 
 public class FileServiceServer{
     private static byte[] a;
@@ -21,6 +26,13 @@ public class FileServiceServer{
     private static boolean success = false;
     private static ByteBuffer fileBytes = null;
     private static ExecutorService executor = Executors.newFixedThreadPool(2);
+
+    private static boolean uploader = false;
+    private static int downloaders = 0;
+    private static ReentrantLock lock = new ReentrantLock();
+    private static Condition noUploader = lock.newCondition();
+    private static Condition noDownloaderOrUploader = lock.newCondition();
+    private static int shared = 0;
 
     public static void main(String[] args) throws Exception{
         //Process all channel request from the client
@@ -53,13 +65,7 @@ public class FileServiceServer{
                     executor.submit(new FileDownload(serveChannel, fileName, request));
                     break;
                 case 'U':
-                    executor.submit(() -> {
-                        try {
-                            handleUpload(serveChannel, request);
-                        }catch (IOException e) {
-                            e.printStackTrace();
-                        }
-                    });
+                    executor.submit(new FileUpload(serveChannel, request));
                     break;
                 case 'D':
                     //Excludes the bytes that we got from the command
@@ -124,6 +130,10 @@ public class FileServiceServer{
                         serveChannel.write(code);
                     }
                     break;
+                case 'Q':
+                    executor.shutdown();
+                    System.exit(0);
+                    break;
                 default:
                     System.out.println("Bye Bye!!");
                     break;
@@ -133,49 +143,68 @@ public class FileServiceServer{
             //Rewinds the position without touching the limit
             request.rewind();
         }
+    }
+
+    public static class FileUpload implements Runnable {
+        private final SocketChannel serveChannel;
+        private final ByteBuffer request;
+
+        public FileUpload(SocketChannel serveChannel, ByteBuffer request) {
+            this.serveChannel = serveChannel;
+            this.request = request;
+        }
+
+
+        public void run() {
+            try {
+                handleUpload(serveChannel, request);
+            }catch(IOException e) {
+                e.printStackTrace();
+            }
+        }
+
+        public static void handleUpload(SocketChannel serveChannel, ByteBuffer request) throws IOException {
+            a = new byte[request.remaining()];
+
+            request.get(a);
+            String totalData = new String(a);
+
+            int separatorIndex = totalData.indexOf('%');
+
+            if(separatorIndex == -1) {
+                System.out.println("Invalid file format");
+                ByteBuffer code = ByteBuffer.wrap("Process Failed".getBytes());
+                serveChannel.write(code);
+                return;
+            }
+
+            fileName = totalData.substring(0, separatorIndex);
+            Path outputPath = Paths.get("ServerFiles", fileName);
+            FileOutputStream fos = new FileOutputStream(outputPath.toFile(), true);  // append mode
+
+            byte[] remainingBytes = totalData.substring(separatorIndex + 1).getBytes();
+            fos.write(remainingBytes);
+
+            ByteBuffer fileChunkBuffer = ByteBuffer.allocate(1000);
+            int bytesRead;
+
+            while ((bytesRead = serveChannel.read(fileChunkBuffer)) > 0) {
+                fos.write(fileChunkBuffer.array(), 0, bytesRead);
+                fileChunkBuffer.clear();
+            }
+
+            fos.close();
+
+
+            ByteBuffer sCode = ByteBuffer.wrap("S".getBytes());
+            serveChannel.write(sCode);
+            serveChannel.write(ByteBuffer.wrap(fileName.getBytes()));
+
+            serveChannel.close();
+        }
 
     }
 
-
-    public static void handleUpload(SocketChannel serveChannel, ByteBuffer request) throws IOException {
-        a = new byte[request.remaining()];
-
-        request.get(a);
-        String totalData = new String(a);
-
-        int separatorIndex = totalData.indexOf('%');
-
-        if(separatorIndex == -1) {
-            System.out.println("Invalid file format");
-            ByteBuffer code = ByteBuffer.wrap("Process Failed".getBytes());
-            serveChannel.write(code);
-            return;
-        }
-
-        fileName = totalData.substring(0, separatorIndex);
-        Path outputPath = Paths.get("ServerFiles", fileName);
-        FileOutputStream fos = new FileOutputStream(outputPath.toFile(), true);  // append mode
-
-        byte[] remainingBytes = totalData.substring(separatorIndex + 1).getBytes();
-        fos.write(remainingBytes);
-
-        ByteBuffer fileChunkBuffer = ByteBuffer.allocate(1000);
-        int bytesRead;
-
-        while ((bytesRead = serveChannel.read(fileChunkBuffer)) > 0) {
-            fos.write(fileChunkBuffer.array(), 0, bytesRead);
-            fileChunkBuffer.clear();
-        }
-
-        fos.close();
-
-
-        ByteBuffer sCode = ByteBuffer.wrap("S".getBytes());
-        serveChannel.write(sCode);
-        serveChannel.write(ByteBuffer.wrap(fileName.getBytes()));
-
-        serveChannel.close();
-    }
 
     public static class FileDownload implements Runnable {
         private final SocketChannel serveChannel;
@@ -204,8 +233,6 @@ public class FileServiceServer{
             request.get(fileNameBytes);
             fileName = new String(fileNameBytes);
             file = new File("ServerFiles/"+ fileName);
-
-            System.out.println("OUR FILEEE: "+ file);
             if(file.exists() && file.isFile()) {
                 byte[] fileContent = Files.readAllBytes(file.toPath());
                 ByteBuffer fileBuffer = ByteBuffer.wrap(fileContent);
@@ -222,3 +249,5 @@ public class FileServiceServer{
         }
     }
 }
+
+
